@@ -18,8 +18,11 @@ from invariant_forge.generator.handler_gen import HandlerGenerator
 from invariant_forge.generator.suite_gen import SuiteGenerator
 from invariant_forge.generator.poc_gen import PoCGenerator
 from invariant_forge.runner import FoundryRunner
+from invariant_forge.symbolic_runner import SymbolicRunner
+
 
 console = Console()
+
 
 
 def scan_contract(contract_path: str, workspace_dir: str = None, fuzz_runs: int = 1000):
@@ -135,17 +138,100 @@ def scan_contract(contract_path: str, workspace_dir: str = None, fuzz_runs: int 
         console.print(f"[yellow]PoC verification output:[/yellow]\n{poc_verify.stdout}\n{poc_verify.stderr}")
 
 
+def prove_contract(contract_path: str, solver: str = "auto", workspace_dir: str = None, timeout: int = 120):
+    console.print(Panel.fit(
+        "[bold cyan]🔬 InvariantForge Formal Verifier — Halmos & SMT Symbolic Engine[/bold cyan]\n"
+        "[dim]Ramanujan Mathematical Rigor & Universal Input Domain Guarantees[/dim]",
+        border_style="cyan"
+    ))
+
+    contract_name = os.path.splitext(os.path.basename(contract_path))[0]
+
+    # Determine Foundry testbed workspace
+    if not workspace_dir:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        workspace_dir = os.path.join(base_dir, "testbed")
+
+    resolved_solver = SymbolicRunner.get_available_solver(solver if solver != "auto" else None)
+    console.print(f"[green]✔[/green] Target Contract: [bold]{contract_name}[/bold]")
+    console.print(f"[green]✔[/green] SMT Solver Selected: [bold cyan]{resolved_solver.upper()}[/bold cyan]")
+    console.print(f"[bold yellow]⚡ Launching Halmos Symbolic Execution (∀ inputs in 2^256)...[/bold yellow]\n")
+
+    with console.status(f"[bold cyan]Symbolically exploring paths with {resolved_solver}...[/bold cyan]"):
+        result = SymbolicRunner.run_symbolic_proof(
+            workspace_dir=workspace_dir,
+            contract_name=contract_name,
+            solver=resolved_solver,
+            timeout=timeout,
+        )
+
+    # Render results table
+    table = Table(title=f"Symbolic Proof Telemetry — {contract_name}")
+    table.add_column("Symbolic Theorem / Invariant", style="cyan")
+    table.add_column("Result", style="bold")
+    table.add_column("Paths Explored", justify="right")
+    table.add_column("Proof Time", justify="right")
+
+    for check in result.checks:
+        status_color = "green" if check.status == "PASS" else ("red" if check.status == "FAIL" else "yellow")
+        table.add_row(
+            check.function_name,
+            f"[{status_color}]{check.status}[/{status_color}]",
+            str(check.paths_explored),
+            f"{check.time_seconds:.2f}s",
+        )
+
+    console.print(table)
+
+    if result.success:
+        console.print(Panel(
+            f"[bold green]✔ ALL THEOREMS MATHEMATICALLY PROVEN! (UNSAT)[/bold green]\n\n"
+            f"• Verified by SMT Solver: [bold cyan]{result.solver_used.upper()}[/bold cyan]\n"
+            f"• Total Theorems Proven: [bold green]{result.total_passed}[/bold green]\n"
+            f"• Proof Execution Time: [green]{result.total_time_seconds:.2f}s[/green]\n"
+            f"• Mathematical Invariant: No state input exists in ∀ x ∈ [0, 2^256-1] that violates assertions.",
+            title="Formal Verification Passed",
+            border_style="green",
+        ))
+    else:
+        # Counterexample details
+        ce_lines = []
+        for check in result.checks:
+            if check.status == "FAIL" and check.counterexample_model:
+                for k, v in check.counterexample_model.items():
+                    ce_lines.append(f"  • {k} = [bold yellow]{v}[/bold yellow]")
+
+        model_text = "\n".join(ce_lines) if ce_lines else "Counterexample detected in assertion branch."
+
+        console.print(Panel(
+            f"[bold red]🚨 FORMAL COUNTEREXAMPLE DISCOVERED! (SAT)[/bold red]\n\n"
+            f"• Target Failed Invariants: [bold yellow]{result.total_failed}[/bold yellow]\n"
+            f"• Solver: [bold cyan]{result.solver_used.upper()}[/bold cyan]\n"
+            f"• Concrete Counterexample State Model:\n{model_text}\n\n"
+            f"Mathematical Proof: The assertion is falsifiable under the above concrete inputs.",
+            title="Symbolic Violation Discovered",
+            border_style="red",
+        ))
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="InvariantForge: Autonomous Smart Contract Invariant Fuzzing & PoC Generator"
+        description="InvariantForge: Autonomous Smart Contract Invariant Fuzzing & Formal Symbolic SMT Verifier"
     )
     subparsers = parser.add_subparsers(dest="command")
 
     # scan command
-    scan_parser = subparsers.add_parser("scan", help="Scan contract for invariant violations and generate PoC")
+    scan_parser = subparsers.add_parser("scan", help="Scan contract with stateful invariant fuzzing and generate PoC")
     scan_parser.add_argument("contract", help="Path to target Solidity contract")
     scan_parser.add_argument("--runs", type=int, default=1000, help="Number of fuzz runs (default: 1000)")
     scan_parser.add_argument("--workspace", type=str, default=None, help="Foundry workspace path")
+
+    # prove command (Formal Symbolic Verification)
+    prove_parser = subparsers.add_parser("prove", help="Formally prove contract invariants using Halmos + SMT solvers")
+    prove_parser.add_argument("contract", help="Path to target Solidity contract or contract name")
+    prove_parser.add_argument("--solver", type=str, default="auto", choices=["auto", "z3", "yices"], help="SMT solver (default: auto)")
+    prove_parser.add_argument("--workspace", type=str, default=None, help="Foundry workspace path")
+    prove_parser.add_argument("--timeout", type=int, default=120, help="SMT solver timeout in seconds (default: 120)")
 
     # rules command
     subparsers.add_parser("rules", help="List Ramanujan Mathematical Invariant catalog")
@@ -154,6 +240,8 @@ def main():
 
     if args.command == "scan":
         scan_contract(args.contract, workspace_dir=args.workspace, fuzz_runs=args.runs)
+    elif args.command == "prove":
+        prove_contract(args.contract, solver=args.solver, workspace_dir=args.workspace, timeout=args.timeout)
     elif args.command == "rules":
         table = Table(title="Ramanujan Mathematical Invariant Catalog")
         table.add_column("Rule ID", style="cyan")
@@ -172,3 +260,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -11,9 +11,9 @@ contract VulnerableVaultHandler is CommonBase, StdCheats, StdUtils, Test {
     VulnerableVault public target;
 
     // Ghost Variables for Invariant Assertions
-    uint256 public ghost_zeroSharesOnNonZeroDepositCount;
-    uint256 public ghost_totalWithdrawnAssets;
     uint256 public ghost_totalDepositedAssets;
+    uint256 public ghost_totalWithdrawnAssets;
+    uint256 public ghost_zeroSharesOnNonZeroDepositCount;
 
     // Actors Array for Multi-User Fuzzing
     address[] public actors;

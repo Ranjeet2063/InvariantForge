@@ -5,14 +5,16 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "invariant-forge"
 version = "0.1.0"
-description = "Autonomous Smart Contract Invariant Fuzzing & Proof-of-Concept Engine"
-authors = [{ name = "Ranjeet & Antigravity" }]
+description = "Autonomous Smart Contract Invariant Fuzzing & SMT Formal Verifier"
+authors = [{ name = "Ranjeet2063" }]
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "rich",
-    "jinja2"
+    "jinja2",
+    "halmos"
 ]
+
 
 [project.scripts]
 invariant-forge = "invariant_forge.cli:main"
