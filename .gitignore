@@ -24,7 +24,6 @@ share/python-wheels/
 MANIFEST
 
 # Virtual Environments
-.env
 .venv
 env/
 venv/
@@ -44,7 +43,8 @@ testbed/cache/
 testbed/broadcast/
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
+config.bat
+node_modules

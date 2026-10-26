@@ -18,3 +18,8 @@ dependencies = [
 
 [project.scripts]
 invariant-forge = "invariant_forge.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["invariant_forge*"]
+
