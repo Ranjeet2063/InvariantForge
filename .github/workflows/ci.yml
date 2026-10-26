@@ -31,13 +31,14 @@ jobs:
       - name: Install System Dependencies (Z3 SMT Solver)
         run: |
           sudo apt-get update
-          sudo apt-get install -y z3 yices
+          sudo apt-get install -y z3
 
       - name: Install Python Dependencies & Halmos
         run: |
           python -m pip install --upgrade pip
-          pip install halmos pytest
+          pip install halmos pytest z3-solver
           pip install -e .
+
 
       - name: Verify Environment & Toolchains
         run: |
